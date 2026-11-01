@@ -95,7 +95,9 @@ class DshService : Service() {
                 controller.startProcess()
             }
         }
-        return START_NOT_STICKY
+        // START_STICKY: 进程被系统回收（锁屏/省电清理）后系统自动拉起服务，onStartCommand(null) 走 else 分支重启引擎。
+        // 之前是 START_NOT_STICKY，锁屏杀进程后引擎不会恢复，正在执行的回合直接结束。
+        return START_STICKY
     }
 
     override fun onDestroy() {
