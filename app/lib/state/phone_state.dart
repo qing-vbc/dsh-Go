@@ -396,24 +396,9 @@ final phoneStopWatcherProvider = Provider<void>((ref) {
     final status = await channel.status();
     // No native side (tests, an older build): nothing to watch.
     if (disposed || !status.ready) return;
-    var stopped = status.task.stopped;
-    sub = channel.statusChanges.listen((s) {
-      if (s.task.stopped && !stopped) unawaited(_cancelLocalTurns(ref));
-      stopped = s.task.stopped;
-    }, onError: (_) {});
+    // 手机操控任务停止（含熄屏 stopAll）不再取消对话会话：
+    // 任务停止只影响手机操控本身，模型的回合继续（工具返回「任务已停止」，由模型自己收尾）。
+    // 这里是「锁屏打断对话」的真正源头，删除该联动即可根治。
+    sub = channel.statusChanges.listen((s) {}, onError: (_) {});
   }());
 });
-
-Future<void> _cancelLocalTurns(Ref ref) async {
-  final client = ref.read(localConnectionProvider).value?.client;
-  if (client == null) return;
-  try {
-    for (final s in await client.listSessions()) {
-      if (s.running) {
-        await client.cancel(s.sessionId).catchError((Object _) {});
-      }
-    }
-  } catch (_) {
-    // The engine may be restarting; nothing left to stop then.
-  }
-}
