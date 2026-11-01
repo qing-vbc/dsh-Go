@@ -1315,6 +1315,10 @@ class ChatController extends Notifier<ChatState> {
   /// [failure] in the banner, when it did not go through.
   Future<bool> _stop(_ChatOperation operation, {String? failure}) async {
     if (!_currentOperation(operation)) return false;
+    // 后台保活：熄屏/锁屏（App 不在前台）时不允许取消正在执行的任务，
+    // 无论取消来自人、锁屏监听还是系统 UI。只有 App 在前台时「停止」才生效。
+    // 这也是 DSH Go 后台运行能力的核心：锁屏不等于停止对话。
+    if (!ref.read(appForegroundProvider)) return false;
     _beginStopping(operation);
     try {
       await operation.client.cancel(sessionId);
