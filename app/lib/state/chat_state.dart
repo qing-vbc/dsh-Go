@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:dsh_client/dsh_client.dart';
@@ -1313,7 +1314,16 @@ class ChatController extends Notifier<ChatState> {
 
   /// `session/cancel` behind 「正在停止」; false, with the stop key back and
   /// [failure] in the banner, when it did not go through.
+  /// 锁屏取消诊断（release 可用）：写 App 私有目录，复现后读 /data/user/0/io.github.ccch1mneyyy.dsh_app/files/cancel-debug.log
+  void _debugLog(String msg) {
+    try {
+      final f = File('/data/user/0/io.github.ccch1mneyyy.dsh_app/files/cancel-debug.log');
+      f.writeAsStringSync('${DateTime.now().toIso8601String()}\t$msg\n', mode: FileMode.append, flush: true);
+    } catch (_) {}
+  }
+
   Future<bool> _stop(_ChatOperation operation, {String? failure}) async {
+    _debugLog('_stop fg=${ref.read(appForegroundProvider)}');
     if (!_currentOperation(operation)) return false;
     // 后台保活：熄屏/锁屏（App 不在前台）时不允许取消正在执行的任务，
     // 无论取消来自人、锁屏监听还是系统 UI。只有 App 在前台时「停止」才生效。
@@ -1335,6 +1345,7 @@ class ChatController extends Notifier<ChatState> {
   /// wakes it with the order unchanged. Resolves to what could not be put
   /// back (the screen returns it to the composer).
   Future<List<PendingPrompt>> cancel() async {
+    _debugLog('cancel() fg=${ref.read(appForegroundProvider)} running=${state.running}');
     final client = _client;
     if (client == null || !_canControl || !state.running || state.stopping) return const [];
     final operation = _ChatOperation(ref, client, _syncScope);
