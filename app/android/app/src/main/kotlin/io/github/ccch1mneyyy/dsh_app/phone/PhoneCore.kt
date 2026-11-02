@@ -85,6 +85,12 @@ class PhoneCore(
             // l10n:keep agent tool result
             return ToolOutput("手机操控已在 DSH 设置里关闭。请用户在 设置 → 手机操控 里打开后重启引擎。", isError = true)
         }
+        // root 是独立的系统命令（不依赖屏幕与无障碍）：不进手机操控任务队列，
+        // 熄屏 / 停止操控不会中断正在执行的 root 命令。
+        if (name == PhoneToolCatalog.ROOT) {
+            val out = root(Args(args))
+            return ToolOutput(out.text, out.error)
+        }
         val outcome = worker.run(budgetMs(name), MAX_TOTAL_MS) { scope -> execute(name, Args(args), scope) }
         tasks.touch()
         val out = when (outcome) {
@@ -597,20 +603,24 @@ class PhoneCore(
     /** 以 root 身份执行 shell 命令（Magisk / KernelSU / APatch 的 su）。 */
     private fun root(a: Args): Out {
         val cmd = a.str("command") ?: return Out("需要 command 参数。", error = true)
-        val timeout = (a.int("timeoutMs") ?: 20_000).coerceIn(1_000, 60_000)
+        // 默认 60 秒、最多 120 秒；长流程请自己用 nohup 丢后台，不要依赖工具等待。
+        val timeout = (a.int("timeoutMs") ?: 60_000).coerceIn(1_000, 120_000)
         val su = listOf("/system/bin/su", "/system/xbin/su", "/system/sbin/su").firstOrNull { java.io.File(it).exists() } ?: "su"
         return try {
             val p = ProcessBuilder(su, "-c", cmd).redirectErrorStream(true).start()
             val done = p.waitFor(timeout.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
             if (!done) {
                 p.destroyForcibly()
-                Out("root 命令超时（${timeout}ms），已终止。", error = true)
+                Out("root 命令超时（${timeout}ms），已终止。长流程请用 nohup ... & 丢后台。", error = true)
             } else {
                 val out = p.inputStream.bufferedReader().use { it.readText() }
                 Out(out.ifBlank { "(无输出)" } + "\nexit=" + p.exitValue(), error = p.exitValue() != 0)
             }
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            Out("root 命令被中断（任务停止或人工取消），未完成。这不是授权问题。", error = true)
         } catch (e: Exception) {
-            Out("root 执行失败：" + e.javaClass.simpleName + ": " + (e.message ?: "需要 root 管理器（Magisk / KernelSU / APatch）授权 DSH Go") + "。", error = true)
+            Out("root 执行失败：" + e.javaClass.simpleName + ": " + (e.message ?: "未知原因") + "。", error = true)
         }
     }
 

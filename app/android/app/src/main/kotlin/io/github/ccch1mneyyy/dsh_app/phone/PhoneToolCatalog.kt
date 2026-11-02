@@ -257,7 +257,7 @@ object PhoneToolCatalog {
                 // l10n:keep agent tool catalog
                 "command" to str("要执行的 shell 命令"),
                 // l10n:keep agent tool catalog
-                "timeoutMs" to int("超时毫秒（默认 20000，最大 60000）", 1000, 60000),
+                "timeoutMs" to int("超时毫秒（默认 60000，最大 120000）；长流程请用 nohup 丢后台", 1000, 120000),
             ),
             // l10n:keep agent tool catalog
             listOf("command"),
